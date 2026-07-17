@@ -313,7 +313,7 @@ def inject_links_in_text(text: str, rules: list[AffiliateRule]) -> str:
     label = match.group(1).strip()
     for rule in rules:
       if keyword_matches(label, rule):
-        return f"[{label}]({rule.url})"
+        return f"<a href='{rule.url}' target='_blank' rel='noopener nofollow sponsored'>{label}</a>"
     return link_part
 
   def rewrite_html_anchor(link_part: str) -> str:
@@ -326,22 +326,51 @@ def inject_links_in_text(text: str, rules: list[AffiliateRule]) -> str:
     if not selected_rule:
       return link_part
     if re.search(r'href\s*=\s*"[^"]*"', link_part, flags=re.IGNORECASE):
-      return re.sub(
+      updated = re.sub(
         r'href\s*=\s*"[^"]*"',
         f'href="{selected_rule.url}"',
         link_part,
         count=1,
         flags=re.IGNORECASE,
       )
-    if re.search(r"href\s*=\s*'[^']*'", link_part, flags=re.IGNORECASE):
-      return re.sub(
+    elif re.search(r"href\s*=\s*'[^']*'", link_part, flags=re.IGNORECASE):
+      updated = re.sub(
         r"href\s*=\s*'[^']*'",
         f"href='{selected_rule.url}'",
         link_part,
         count=1,
         flags=re.IGNORECASE,
       )
-    return link_part
+    else:
+      updated = link_part
+
+    if re.search(r'target\s*=\s*"[^"]*"', updated, flags=re.IGNORECASE):
+      updated = re.sub(r'target\s*=\s*"[^"]*"', 'target="_blank"', updated, count=1, flags=re.IGNORECASE)
+    elif re.search(r"target\s*=\s*'[^']*'", updated, flags=re.IGNORECASE):
+      updated = re.sub(r"target\s*=\s*'[^']*'", "target='_blank'", updated, count=1, flags=re.IGNORECASE)
+    else:
+      updated = re.sub(r"^<a\b", "<a target='_blank'", updated, count=1, flags=re.IGNORECASE)
+
+    if re.search(r'rel\s*=\s*"[^"]*"', updated, flags=re.IGNORECASE):
+      updated = re.sub(
+        r'rel\s*=\s*"[^"]*"',
+        'rel="noopener nofollow sponsored"',
+        updated,
+        count=1,
+        flags=re.IGNORECASE,
+      )
+    elif re.search(r"rel\s*=\s*'[^']*'", updated, flags=re.IGNORECASE):
+      updated = re.sub(
+        r"rel\s*=\s*'[^']*'",
+        "rel='noopener nofollow sponsored'",
+        updated,
+        count=1,
+        flags=re.IGNORECASE,
+      )
+    else:
+      updated = re.sub(r"^<a\b", "<a rel='noopener nofollow sponsored'", updated, count=1, flags=re.IGNORECASE)
+
+    return updated
 
   def replace_keyword(segment: str, rule: AffiliateRule) -> str:
     pattern = re.compile(rf"(?<![\w])({re.escape(rule.keyword)})(?![\w])", re.IGNORECASE)
