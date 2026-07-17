@@ -1,5 +1,5 @@
 async function loadPosts() {
-  const SITE_URL = "https://www.cryptobelastinggids.nl";
+  const SITE_URL = "https://www.taxcryptoguide.com";
   const postsContainer = document.getElementById("posts");
   const emptyState = document.getElementById("empty");
   const searchInput = document.getElementById("post-search");
@@ -8,7 +8,7 @@ async function loadPosts() {
   const estimateReadingTime = (text) => {
     const words = stripHtmlTags(text).split(/\s+/).filter(Boolean).length;
     const minutes = Math.max(5, Math.ceil(words / 220));
-    return `${minutes} min leestijd`;
+    return `${minutes} min reading time`;
   };
 
   if (footerYear) {
@@ -41,7 +41,7 @@ async function loadPosts() {
 
       if (!filteredPosts.length) {
         postsContainer.innerHTML = "";
-        emptyState.textContent = "Geen artikelen gevonden voor je zoekopdracht. Probeer een ander trefwoord.";
+        emptyState.textContent = "No articles found for your search. Try another keyword.";
         emptyState.classList.remove("hidden");
         return;
       }
@@ -52,10 +52,10 @@ async function loadPosts() {
           (post) => `
           <article class="group rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
             <div class="flex items-center justify-between gap-3">
-              <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Belastinggids</span>
+              <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Tax Guide</span>
               <span class="text-xs font-medium text-slate-500">${estimateReadingTime(post.excerpt)}</span>
             </div>
-            <p class="mt-4 text-xs uppercase tracking-wide text-slate-400">${new Date(post.published_at).toLocaleDateString("nl-NL", {
+            <p class="mt-4 text-xs uppercase tracking-wide text-slate-400">${new Date(post.published_at).toLocaleDateString("en-US", {
               year: "numeric",
               month: "short",
               day: "numeric",
@@ -65,7 +65,7 @@ async function loadPosts() {
             </h3>
             <p class="mt-3 text-sm leading-relaxed text-slate-600">${stripHtmlTags(post.excerpt)}</p>
             <a class="mt-5 inline-flex items-center text-sm font-semibold text-indigo-600 transition hover:underline" href="${SITE_URL}/post.html?slug=${encodeURIComponent(post.slug)}">
-              Lees meer →
+              Read More →
             </a>
           </article>
         `
@@ -80,7 +80,7 @@ async function loadPosts() {
       });
     }
   } catch (error) {
-    emptyState.textContent = "Artikelen konden niet worden geladen. Controleer of /content/index.json bestaat.";
+    emptyState.textContent = "Articles could not be loaded. Check whether /content/index.json exists.";
     emptyState.classList.remove("hidden");
   }
 }

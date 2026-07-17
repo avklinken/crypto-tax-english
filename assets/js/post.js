@@ -1,4 +1,4 @@
-const SITE_URL = "https://www.cryptobelastinggids.nl";
+const SITE_URL = "https://www.taxcryptoguide.com";
 
 function getSlug() {
   const params = new URLSearchParams(window.location.search);
@@ -13,7 +13,7 @@ function estimateReadingTime(markdown) {
   const plain = stripHtmlTags(String(markdown || "").replace(/[#>*_`[\]()!-]/g, " "));
   const words = plain.split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.ceil(words / 220));
-  return `${minutes} min leestijd`;
+  return `${minutes} min reading time`;
 }
 
 function parseFrontMatter(markdown) {
@@ -117,7 +117,7 @@ function styleRenderedContent(contentEl, articleTitle) {
   });
   contentEl.querySelectorAll("img").forEach((img) => {
     if (!img.getAttribute("alt") || !img.getAttribute("alt").trim()) {
-      img.setAttribute("alt", `Illustratie bij ${articleTitle}`);
+      img.setAttribute("alt", `Illustration for ${articleTitle}`);
     }
     img.setAttribute("loading", "lazy");
     img.setAttribute("decoding", "async");
@@ -137,13 +137,13 @@ function applySeo(meta, fallbackTitle, fallbackDescription, slug) {
   const description = stripHtmlTags(meta.meta_description || fallbackDescription);
   const url = `${SITE_URL}/post.html?slug=${encodeURIComponent(slug)}`;
 
-  document.title = `${title} | CryptoBelastingGids`;
+  document.title = `${title} | TaxCryptoGuide`;
   setMetaTag('meta[name="description"]', description);
   setMetaTag('meta[property="og:title"]', title);
   setMetaTag('meta[property="og:description"]', description);
   setMetaTag('meta[property="og:type"]', "article");
   setMetaTag('meta[property="og:url"]', url);
-  setMetaTag('meta[property="og:site_name"]', "CryptoBelastingGids");
+  setMetaTag('meta[property="og:site_name"]', "TaxCryptoGuide");
   setMetaTag('meta[name="robots"]', "index,follow");
 
   const canonical = document.getElementById("canonical-link");
@@ -212,7 +212,7 @@ async function loadPost() {
   }
 
   if (!slug) {
-    errorEl.textContent = "Ontbrekende slug. Open deze pagina met ?slug=jouw-artikel-slug.";
+    errorEl.textContent = "Missing slug. Open this page with ?slug=your-article-slug.";
     errorEl.classList.remove("hidden");
     return;
   }
@@ -225,17 +225,17 @@ async function loadPost() {
     titleEl.textContent = stripHtmlTags(post.meta.title);
     contentEl.innerHTML = renderedHtml;
     styleRenderedContent(contentEl, post.meta.title);
-    metaEl.textContent = post.meta.published_at ? `Gepubliceerd: ${new Date(post.meta.published_at).toLocaleDateString("nl-NL")}` : `Artikel: ${slug}`;
+    metaEl.textContent = post.meta.published_at ? `Published: ${new Date(post.meta.published_at).toLocaleDateString("en-US")}` : `Article: ${slug}`;
     if (readingTimeEl) {
       readingTimeEl.textContent = estimateReadingTime(post.body);
     }
 
     const fallbackDescription =
-      stripHtmlTags(post.body.split("\n").find((line) => line.trim().length > 40) || "Crypto belastinggids met praktische automatiseringsinzichten.").slice(0, 155) ||
-      "Crypto belastinggids met praktische automatiseringsinzichten.";
+      stripHtmlTags(post.body.split("\n").find((line) => line.trim().length > 40) || "Crypto tax guide with practical automation insights.").slice(0, 155) ||
+      "Crypto tax guide with practical automation insights.";
     applySeo(post.meta, post.meta.title, fallbackDescription, slug);
   } catch (error) {
-    errorEl.textContent = "Dit artikel kon niet worden geladen.";
+    errorEl.textContent = "This article could not be loaded.";
     errorEl.classList.remove("hidden");
   }
 }

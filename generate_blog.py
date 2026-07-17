@@ -11,7 +11,8 @@ from typing import Iterable
 
 from openai import OpenAI
 
-SITE_URL = "https://www.cryptobelastinggids.nl"
+SITE_URL = "https://www.taxcryptoguide.com"
+ARTICLES_PER_RUN = 2
 ROOT = Path(__file__).resolve().parent
 CONTENT_DIR = ROOT / "content"
 TOPICS_FILE = ROOT / "topics.txt"
@@ -45,7 +46,7 @@ def quote_yaml_value(value: str) -> str:
   return json.dumps(value, ensure_ascii=False)
 
 
-def read_top_topics(path: Path, amount: int = 2) -> tuple[list[str], list[str]]:
+def read_top_topics(path: Path, amount: int = ARTICLES_PER_RUN) -> tuple[list[str], list[str]]:
   if not path.exists():
     raise FileNotFoundError(f"Missing topics file: {path}")
 
@@ -129,29 +130,29 @@ def strip_leading_h1(markdown: str) -> str:
 
 def generate_article(client: OpenAI, topic: str) -> dict[str, str]:
   prompt = f"""
-Geef een hoogwaardig Nederlands SEO-artikel over: "{topic}".
+Write a high-quality English SEO article about: "{topic}".
 
-Retourneer uitsluitend geldige JSON met deze sleutels:
-- title: de artikelkop in het Nederlands
-- meta_title: een klikwaardige meta title (max 60 tekens)
-- meta_description: een pakkende meta description (max 155 tekens)
-- content_markdown: het volledige artikel in Markdown
+Return only valid JSON with these keys:
+- title: the article headline in English
+- meta_title: a click-worthy meta title (max 60 characters)
+- meta_description: a compelling meta description (max 155 characters)
+- content_markdown: the full article in Markdown
 
-Regels:
-- Schrijf ongeveer 1200 woorden.
-- Schrijf in professioneel, helder Nederlands.
-- Gebruik alleen een intro en secties met H2/H3; voeg geen H1 toe in de body.
-- Gebruik echte Markdown-opmaak voor koppen, lijsten, vetgedrukte tekst en links.
-- Gebruik alleen beschrijvende alt-teksten bij afbeeldingen en voorkom raw HTML img-tags.
-- Maak de content SEO-vriendelijk, maar natuurlijk leesbaar.
-- Geen code fences, geen extra uitleg, alleen JSON.
+Rules:
+- Write approximately 1200 words.
+- Write in professional, clear English.
+- Use only an intro and sections with H2/H3; do not add an H1 in the body.
+- Use proper Markdown formatting for headings, lists, bold text, and links.
+- Use descriptive alt text for images and avoid raw HTML img tags.
+- Make the content SEO-friendly while still naturally readable.
+- No code fences, no extra explanations, JSON only.
 """.strip()
 
   response = client.chat.completions.create(
     model="gpt-4o",
     temperature=0.7,
     messages=[
-      {"role": "system", "content": "You are an expert Dutch SEO blog writer."},
+      {"role": "system", "content": "You are an expert English SEO blog writer."},
       {"role": "user", "content": prompt},
     ],
   )
@@ -396,7 +397,7 @@ def build_robots(robots_path: Path) -> None:
 
 def main() -> None:
   CONTENT_DIR.mkdir(parents=True, exist_ok=True)
-  topics, remaining = read_top_topics(TOPICS_FILE, amount=2)
+  topics, remaining = read_top_topics(TOPICS_FILE, amount=ARTICLES_PER_RUN)
 
   if topics:
     api_key = os.getenv("OPENAI_API_KEY")
