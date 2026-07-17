@@ -1,10 +1,8 @@
 name: Generate Daily Blog Posts
 on:
   schedule:
-    # 09:00 UTC = 11:00 NL zomertijd
-    # 15:00 UTC = 17:00 NL zomertijd
     - cron: '0 9,15 * * *'
-
+  workflow_dispatch: # Dit voegt een handmatige startknop toe
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
