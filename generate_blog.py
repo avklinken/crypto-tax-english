@@ -161,7 +161,19 @@ def parse_json_payload(raw: str) -> dict[str, object]:
   return payload
 
 
-def generate_article(client: OpenAI, topic: str) -> dict[str, str]:
+def build_affiliate_keyword_requirement(keywords: list[str]) -> str:
+  if not keywords:
+    return ""
+  keyword_list = ", ".join(keywords)
+  return (
+    "Crucial SEO Requirement: You MUST naturally and contextually weave the "
+    f"following brand names into the article at least 1 or 2 times each: {keyword_list}."
+  )
+
+
+def generate_article(client: OpenAI, topic: str, affiliate_keywords: list[str]) -> dict[str, str]:
+  affiliate_requirement = build_affiliate_keyword_requirement(affiliate_keywords)
+  affiliate_requirement_line = f"- {affiliate_requirement}" if affiliate_requirement else ""
   prompt = f"""
 Write a high-quality English SEO article about: "{topic}".
 
@@ -178,6 +190,7 @@ Rules:
 - Use proper Markdown formatting for headings, lists, bold text, and links.
 - Use descriptive alt text for images and avoid raw HTML img tags.
 - Make the content SEO-friendly while still naturally readable.
+{affiliate_requirement_line}
 - No code fences, no extra explanations, JSON only.
 """.strip()
 
@@ -191,7 +204,8 @@ Rules:
         "content": (
           "You are an expert English SEO blog writer. "
           "Return one valid JSON object only with keys: "
-          "title, meta_title, meta_description, content."
+          "title, meta_title, meta_description, content. "
+          f"{affiliate_requirement}"
         ),
       },
       {"role": "user", "content": prompt},
@@ -481,6 +495,8 @@ def build_robots(robots_path: Path) -> None:
 
 def main() -> None:
   CONTENT_DIR.mkdir(parents=True, exist_ok=True)
+  rules = load_affiliate_rules(AFFILIATES_FILE)
+  affiliate_keywords = [rule.keyword for rule in rules]
   topics, remaining = read_top_topics(TOPICS_FILE, amount=ARTICLES_PER_RUN)
 
   if topics:
@@ -492,7 +508,7 @@ def main() -> None:
     failed_topics: list[str] = []
     for topic in topics:
       try:
-        article = generate_article(client, topic)
+        article = generate_article(client, topic, affiliate_keywords)
         save_generated_post(topic, article)
       except Exception as exc:
         print(f"Warning: skipped topic '{topic}' due to error: {exc}")
@@ -500,7 +516,6 @@ def main() -> None:
 
     write_remaining_topics(TOPICS_FILE, failed_topics + remaining)
 
-  rules = load_affiliate_rules(AFFILIATES_FILE)
   inject_links_into_all_articles(CONTENT_DIR, rules)
   rebuild_post_index(CONTENT_DIR, INDEX_FILE)
   build_sitemap(CONTENT_DIR, SITEMAP_FILE)
