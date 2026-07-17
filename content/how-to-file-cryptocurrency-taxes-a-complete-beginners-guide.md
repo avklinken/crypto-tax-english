@@ -51,7 +51,7 @@ Some popular cryptocurrency tax software options include:
 
 - [CoinTracking](https://cointracking.info) 
 - [CryptoTrader.Tax](https://cryptotrader.tax)
-- [Koinly](https://koinly.io)
+- [Koinly](https://koinly.io/?via=ED1CED45&utm_source=affiliate)
 
 ### 4. Report on Tax Forms
 
