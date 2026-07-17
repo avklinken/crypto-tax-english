@@ -75,6 +75,41 @@ function removeLeadingH1(markdown) {
   return body.join("\n").trim();
 }
 
+function extractFromRenderedHtml(htmlText, slug) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, "text/html");
+  const container = doc.querySelector(".markdown-body");
+  if (!container) return null;
+
+  const repoHeading = container.querySelector("h1");
+  if (repoHeading && repoHeading.querySelector("a")) {
+    repoHeading.remove();
+  }
+
+  const bodyHtml = container.innerHTML.trim();
+  const plainText = (container.textContent || "").trim();
+  if (!bodyHtml) return null;
+
+  const title =
+    stripHtmlTags(doc.querySelector('meta[property="og:title"]')?.getAttribute("content")) ||
+    stripHtmlTags(doc.querySelector("title")?.textContent) ||
+    slug.replace(/-/g, " ");
+  const metaDescription =
+    stripHtmlTags(doc.querySelector('meta[name="description"]')?.getAttribute("content")) || "";
+
+  return {
+    meta: {
+      title,
+      meta_title: title,
+      meta_description: metaDescription,
+      published_at: "",
+      slug,
+    },
+    body: plainText,
+    body_html: bodyHtml,
+  };
+}
+
 function styleRenderedContent(contentEl, articleTitle) {
   contentEl.className = "text-slate-700";
 
@@ -169,7 +204,7 @@ function extractMarkdownDocument(markdownText, fallbackSlug) {
 }
 
 async function fetchPost(slug) {
-  const candidates = [`./content/${slug}.md`, `./content/${slug}.json`, `./content/${slug}.txt`];
+  const candidates = [`./content/${slug}.md`, `./content/${slug}.json`, `./content/${slug}.txt`, `./content/${slug}.html`];
 
   for (const path of candidates) {
     const response = await fetch(path, { cache: "no-store" });
@@ -189,6 +224,15 @@ async function fetchPost(slug) {
         },
         body: removeLeadingH1(markdown),
       };
+    }
+
+    if (path.endsWith(".html")) {
+      const rawHtml = await response.text();
+      const extracted = extractFromRenderedHtml(rawHtml, slug);
+      if (extracted) {
+        return extracted;
+      }
+      continue;
     }
 
     const rawText = await response.text();
@@ -220,7 +264,9 @@ async function loadPost() {
   try {
     const post = await fetchPost(slug);
     marked.setOptions({ gfm: true, breaks: false });
-    const renderedHtml = DOMPurify.sanitize(marked.parse(post.body));
+    const renderedHtml = post.body_html
+      ? DOMPurify.sanitize(post.body_html)
+      : DOMPurify.sanitize(marked.parse(post.body));
 
     titleEl.textContent = stripHtmlTags(post.meta.title);
     contentEl.innerHTML = renderedHtml;
