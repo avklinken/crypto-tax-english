@@ -169,7 +169,7 @@ Return only valid JSON with these keys:
 - title: the article headline in English
 - meta_title: a click-worthy meta title (max 60 characters)
 - meta_description: a compelling meta description (max 155 characters)
-- content_markdown: the full article in Markdown
+- content: the full article in Markdown
 
 Rules:
 - Write approximately 1200 words.
@@ -186,7 +186,14 @@ Rules:
     temperature=0.7,
     response_format={"type": "json_object"},
     messages=[
-      {"role": "system", "content": "You are an expert English SEO blog writer."},
+      {
+        "role": "system",
+        "content": (
+          "You are an expert English SEO blog writer. "
+          "Return one valid JSON object only with keys: "
+          "title, meta_title, meta_description, content."
+        ),
+      },
       {"role": "user", "content": prompt},
     ],
   )
@@ -202,10 +209,10 @@ Rules:
 
   title = str(payload.get("title", "")).strip() or topic
   meta_title = trim_to_limit(str(payload.get("meta_title", "")).strip() or title, 60)
-  content_markdown = str(payload.get("content_markdown", "")).strip()
+  content_markdown = str(payload.get("content", "") or payload.get("content_markdown", "")).strip()
 
   if not content_markdown:
-    raise RuntimeError(f"Missing content_markdown for topic: {topic}")
+    raise RuntimeError(f"Missing content for topic: {topic}")
 
   plain_body = re.sub(r"<[^>]+>", "", content_markdown)
   plain_body = re.sub(r"[#>*_`]", "", plain_body)
@@ -282,6 +289,46 @@ def inject_links_in_text(text: str, rules: list[AffiliateRule]) -> str:
   anchor_or_markdown_link = re.compile(r"(<a\b[^>]*>.*?</a>|\[[^\]]+\]\([^)]+\))", re.IGNORECASE | re.DOTALL)
   front_matter, body, has_front_matter = split_front_matter_block(text)
 
+  def keyword_matches(value: str, rule: AffiliateRule) -> bool:
+    return bool(re.search(rf"(?<![\w]){re.escape(rule.keyword)}(?![\w])", value or "", re.IGNORECASE))
+
+  def rewrite_markdown_link(link_part: str) -> str:
+    match = re.match(r"^\[([^\]]+)\]\(([^)]+)\)$", link_part.strip())
+    if not match:
+      return link_part
+    label = match.group(1).strip()
+    for rule in rules:
+      if keyword_matches(label, rule):
+        return f"[{label}]({rule.url})"
+    return link_part
+
+  def rewrite_html_anchor(link_part: str) -> str:
+    label = re.sub(r"<[^>]+>", "", link_part).strip()
+    selected_rule = None
+    for rule in rules:
+      if keyword_matches(label, rule):
+        selected_rule = rule
+        break
+    if not selected_rule:
+      return link_part
+    if re.search(r'href\s*=\s*"[^"]*"', link_part, flags=re.IGNORECASE):
+      return re.sub(
+        r'href\s*=\s*"[^"]*"',
+        f'href="{selected_rule.url}"',
+        link_part,
+        count=1,
+        flags=re.IGNORECASE,
+      )
+    if re.search(r"href\s*=\s*'[^']*'", link_part, flags=re.IGNORECASE):
+      return re.sub(
+        r"href\s*=\s*'[^']*'",
+        f"href='{selected_rule.url}'",
+        link_part,
+        count=1,
+        flags=re.IGNORECASE,
+      )
+    return link_part
+
   def replace_keyword(segment: str, rule: AffiliateRule) -> str:
     pattern = re.compile(rf"(?<![\w])({re.escape(rule.keyword)})(?![\w])", re.IGNORECASE)
     return pattern.sub(
@@ -295,8 +342,11 @@ def inject_links_in_text(text: str, rules: list[AffiliateRule]) -> str:
     for part in parts:
       if not part:
         continue
-      if part.lower().startswith("<a ") or part.startswith("["):
-        processed_parts.append(part)
+      if part.lower().startswith("<a "):
+        processed_parts.append(rewrite_html_anchor(part))
+        continue
+      if part.startswith("["):
+        processed_parts.append(rewrite_markdown_link(part))
         continue
       updated_part = part
       for rule in rules:
@@ -439,11 +489,16 @@ def main() -> None:
       raise EnvironmentError("OPENAI_API_KEY is required to generate new content.")
     client = OpenAI(api_key=api_key)
 
+    failed_topics: list[str] = []
     for topic in topics:
-      article = generate_article(client, topic)
-      save_generated_post(topic, article)
+      try:
+        article = generate_article(client, topic)
+        save_generated_post(topic, article)
+      except Exception as exc:
+        print(f"Warning: skipped topic '{topic}' due to error: {exc}")
+        failed_topics.append(topic)
 
-    write_remaining_topics(TOPICS_FILE, remaining)
+    write_remaining_topics(TOPICS_FILE, failed_topics + remaining)
 
   rules = load_affiliate_rules(AFFILIATES_FILE)
   inject_links_into_all_articles(CONTENT_DIR, rules)
