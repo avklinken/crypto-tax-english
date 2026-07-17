@@ -128,6 +128,39 @@ def strip_leading_h1(markdown: str) -> str:
   return "\n".join(stripped).strip()
 
 
+def parse_json_payload(raw: str) -> dict[str, object]:
+  text = (raw or "").strip()
+  if not text:
+    raise json.JSONDecodeError("Empty response", raw or "", 0)
+
+  # Common failure mode: model wraps JSON in fenced code blocks.
+  if text.startswith("```"):
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+
+  try:
+    payload = json.loads(text)
+  except json.JSONDecodeError:
+    decoder = json.JSONDecoder()
+    payload = None
+    for idx, char in enumerate(text):
+      if char not in "{[":
+        continue
+      try:
+        candidate, _ = decoder.raw_decode(text[idx:])
+        payload = candidate
+        break
+      except json.JSONDecodeError:
+        continue
+    if payload is None:
+      raise
+
+  if not isinstance(payload, dict):
+    raise json.JSONDecodeError("Top-level JSON object expected", text, 0)
+  return payload
+
+
 def generate_article(client: OpenAI, topic: str) -> dict[str, str]:
   prompt = f"""
 Write a high-quality English SEO article about: "{topic}".
@@ -151,6 +184,7 @@ Rules:
   response = client.chat.completions.create(
     model="gpt-4o",
     temperature=0.7,
+    response_format={"type": "json_object"},
     messages=[
       {"role": "system", "content": "You are an expert English SEO blog writer."},
       {"role": "user", "content": prompt},
@@ -162,7 +196,7 @@ Rules:
     raise RuntimeError(f"Empty response for topic: {topic}")
 
   try:
-    payload = json.loads(raw)
+    payload = parse_json_payload(raw)
   except json.JSONDecodeError as exc:
     raise RuntimeError(f"Model returned invalid JSON for topic: {topic}") from exc
 
