@@ -18,18 +18,33 @@
     <link rel="stylesheet" href="./assets/css/styles.css" />
   </head>
   <body class="bg-gray-50 text-slate-900 antialiased">
-    <header class="sticky top-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-md">
+    <header class="site-header sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <a href="https://www.taxcryptoguide.com/" class="text-lg font-extrabold tracking-tight text-slate-900">TaxCryptoGuide</a>
-        <nav class="flex items-center gap-3">
-          <a href="https://www.taxcryptoguide.com/" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Home</a>
-          <a
-            href="https://koinly.io/?via=ED1CED45&utm_source=affiliate"
-            target="_blank"
-            rel="noopener nofollow sponsored"
-            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-            >Top Tool: Koinly</a
-          >
+        <a href="https://www.taxcryptoguide.com/" class="brand-link" aria-label="Go to homepage">
+          <svg class="brand-logo" viewBox="0 0 250 50" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="logoAccentPost" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#F59E0B" />
+                <stop offset="100%" stop-color="#06B6D4" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="6" width="40" height="38" rx="10" fill="#111827" />
+            <path d="M10 34 L18 26 L24 29 L33 17" fill="none" stroke="url(#logoAccentPost)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="18" cy="26" r="2.6" fill="#06B6D4" />
+            <circle cx="24" cy="29" r="2.6" fill="#F59E0B" />
+            <circle cx="33" cy="17" r="2.8" fill="#06B6D4" />
+            <path d="M31 17 L35.5 17 L35.5 21.5" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" />
+            <circle cx="12" cy="14" r="1.8" fill="#06B6D4" />
+            <path d="M12 14 L18 26" stroke="#334155" stroke-width="1.5" />
+            <text x="52" y="32" font-size="17" font-weight="800" fill="#111827" letter-spacing="-0.4">BRAND_NAME</text>
+          </svg>
+          <span class="sr-only">BRAND_NAME</span>
+        </a>
+        <nav class="nav-menu flex items-center gap-1 sm:gap-3" aria-label="Main navigation">
+          <a href="https://www.taxcryptoguide.com/" class="rounded-lg px-2 py-2 text-sm font-semibold transition hover:bg-slate-100 sm:px-3">Home</a>
+          <a href="https://www.taxcryptoguide.com/#guides" class="rounded-lg px-2 py-2 text-sm font-semibold transition hover:bg-slate-100 sm:px-3">Guides</a>
+          <a href="https://www.taxcryptoguide.com/#articles" class="rounded-lg px-2 py-2 text-sm font-semibold transition hover:bg-slate-100 sm:px-3">Articles</a>
+          <a href="https://www.taxcryptoguide.com/#about" class="rounded-lg px-2 py-2 text-sm font-semibold transition hover:bg-slate-100 sm:px-3">About</a>
         </nav>
       </div>
     </header>
