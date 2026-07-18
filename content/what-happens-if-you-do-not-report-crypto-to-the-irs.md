@@ -10,8 +10,7 @@ author_bio: "Noah works at the intersection of cross-border tax, exchange compli
 published_at: "2026-07-17T12:02:53.616175+00:00"
 ---
 
-
-# What Happens If You Do Not Report Crypto To The Irs
+<h1>What Happens If You Do Not Report Crypto To The Irs</h1>
 
 ## Introduction
 

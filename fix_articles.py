@@ -1,134 +1,122 @@
 #!/usr/bin/env python3
+import glob
 import os
 import re
 from pathlib import Path
-from urllib.parse import quote_plus
 
-# Set this if your articles are not in /content.
-BLOG_DIR = Path(os.getenv("BLOG_DIR", "content"))
+MAP_PAD = "content"
+PIXABAY_TECH_URL = "https://pixabay.com"
+ALLOWED_EXTENSIONS = {".md", ".markdown", ".txt", ".html", ".htm"}
 
-ALLOWED_EXTENSIONS = {".md", ".markdown", ".html", ".htm", ".txt"}
-
-# Matches:
-# src="https://example.com"
-# src="https://example.com/image.jpg"
-EXAMPLE_SRC_RE = re.compile(
-  r'''src\s*=\s*(['"])https?://example\.com(?:/[^'"]*)?\1''',
-  re.IGNORECASE,
-)
-
-# Matches markdown image links:
-# ![alt](https://example.com/image.jpg)
-EXAMPLE_MD_IMAGE_RE = re.compile(
-  r'''!\[([^\]]*)\]\(\s*https?://example\.com(?:/[^\)]*)?\s*\)''',
-  re.IGNORECASE,
-)
-
-TITLE_LINE_RE = re.compile(r"^\s*title\s*:\s*(.+)\s*$", re.IGNORECASE)
+IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE | re.DOTALL)
+SRC_RE = re.compile(r'''src\s*=\s*(['"])(.*?)\1''', re.IGNORECASE | re.DOTALL)
+MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)", re.IGNORECASE)
+BROKEN_IMAGE_RE = re.compile(r"(example\.com|source\.unsplash\.com|://unsplash\.com|pixabay\.com/?$)", re.IGNORECASE)
 
 
-def slug_to_title(slug: str) -> str:
-  parts = re.split(r"[-_]+", slug.strip())
-  parts = [p for p in parts if p]
-  return " ".join(parts).title() if parts else "Untitled Article"
+def slug_to_title(path: Path) -> str:
+  slug = path.stem
+  title = re.sub(r"[-_]+", " ", slug).strip()
+  title = re.sub(r"\s+", " ", title)
+  return title.title() if title else "Artikel"
 
 
-def unsplash_url_from_slug(slug: str) -> str:
-  tokens = [t for t in re.split(r"[-_]+", slug.lower()) if t]
-  core = " ".join(tokens[:4]) if tokens else "crypto tax"
-  query = f"{core} crypto tax finance blockchain"
-  return f"https://source.unsplash.com/1600x900/?{quote_plus(query)}"
-
-
-def split_front_matter(text: str):
-  if not text.startswith("---\n"):
+def split_front_matter(text: str) -> tuple[str, str, bool]:
+  if not text.startswith("---"):
     return "", text, False
 
   lines = text.splitlines(keepends=True)
-  end_idx = None
-  for i in range(1, len(lines)):
-    if lines[i].strip() == "---":
-      end_idx = i
+  closing_index = None
+  for idx in range(1, len(lines)):
+    if lines[idx].strip() == "---":
+      closing_index = idx
       break
 
-  if end_idx is None:
+  if closing_index is None:
     return "", text, False
 
-  fm = "".join(lines[: end_idx + 1]) + "\n"
-  body = "".join(lines[end_idx + 1 :]).lstrip("\n")
-  return fm, body, True
+  front_matter = "".join(lines[: closing_index + 1])
+  body = "".join(lines[closing_index + 1 :]).lstrip("\n")
+  return front_matter, body, True
 
 
-def ensure_front_matter_title(front_matter: str, title: str) -> str:
-  lines = front_matter.splitlines()
-  if not lines or lines[0].strip() != "---":
-    return f"---\ntitle: \"{title}\"\n---\n"
+def ensure_h1_near_top(body: str, title: str) -> str:
+  lines = [line.strip() for line in body.splitlines() if line.strip()]
+  top_block = "\n".join(lines[:20])
 
-  found = False
-  for i in range(1, len(lines) - 1):
-    match = TITLE_LINE_RE.match(lines[i])
-    if not match:
-      continue
-    value = match.group(1).strip().strip('"').strip("'")
-    if value:
-      found = True
-    else:
-      lines[i] = f'title: "{title}"'
-      found = True
-    break
+  if re.search(r"<h1\b[^>]*>.*?</h1>", top_block, re.IGNORECASE | re.DOTALL):
+    return re.sub(
+      r"^\s*<h1\b[^>]*>.*?</h1>\s*",
+      f"<h1>{title}</h1>\n\n",
+      body,
+      count=1,
+      flags=re.IGNORECASE | re.DOTALL,
+    )
 
-  if not found:
-    lines.insert(len(lines) - 1, f'title: "{title}"')
+  if re.search(r"^\s*#\s+.+", top_block, re.IGNORECASE | re.MULTILINE):
+    return re.sub(r"^\s*#\s+.+\n*", f"<h1>{title}</h1>\n\n", body, count=1, flags=re.IGNORECASE)
 
-  return "\n".join(lines) + "\n"
+  return f"<h1>{title}</h1>\n\n{body.lstrip()}"
 
 
-def ensure_h1(body: str, title: str) -> str:
-  for line in body.splitlines():
-    if line.strip().startswith("# "):
-      return body
-  return f"# {title}\n\n{body.lstrip()}"
+def strip_hiding_classes_from_img_tag(tag: str) -> str:
+  class_match = re.search(r'''class\s*=\s*(['"])(.*?)\1''', tag, re.IGNORECASE | re.DOTALL)
+  if not class_match:
+    return tag
+
+  quote = class_match.group(1)
+  classes = [c for c in re.split(r"\s+", class_match.group(2).strip()) if c]
+  filtered = [c for c in classes if c.lower() not in {"hidden", "opacity-0", "invisible"}]
+
+  if filtered:
+    replacement = f'class={quote}{" ".join(filtered)}{quote}'
+    return tag[:class_match.start()] + replacement + tag[class_match.end():]
+
+  return tag[:class_match.start()] + tag[class_match.end():]
 
 
-def replace_example_images(text: str, image_url: str) -> str:
-  text = EXAMPLE_SRC_RE.sub(lambda m: f'src={m.group(1)}{image_url}{m.group(1)}', text)
-  text = EXAMPLE_MD_IMAGE_RE.sub(lambda m: f'![{m.group(1)}]({image_url})', text)
-  return text
+def rewrite_html_img_tags(text: str) -> str:
+  def replace(match: re.Match[str]) -> str:
+    tag = strip_hiding_classes_from_img_tag(match.group(0))
+    src_match = SRC_RE.search(tag)
+
+    if not src_match:
+      if tag.endswith("/>"):
+        return tag[:-2] + f' src="{PIXABAY_TECH_URL}" />'
+      if tag.endswith(">"):
+        return tag[:-1] + f' src="{PIXABAY_TECH_URL}">'
+      return tag
+
+    src = src_match.group(2).strip()
+    if BROKEN_IMAGE_RE.search(src):
+      tag = SRC_RE.sub(lambda m: f'src={m.group(1)}{PIXABAY_TECH_URL}{m.group(1)}', tag, count=1)
+    return tag
+
+  return IMG_TAG_RE.sub(replace, text)
 
 
-def fix_file(path: Path) -> bool:
+def rewrite_markdown_images(text: str) -> str:
+  def replace(match: re.Match[str]) -> str:
+    alt = match.group(1)
+    src = match.group(2).strip()
+    if BROKEN_IMAGE_RE.search(src):
+      return f"![{alt}]({PIXABAY_TECH_URL})"
+    return match.group(0)
+
+  return MD_IMAGE_RE.sub(replace, text)
+
+
+def repair_file(path: Path) -> bool:
   original = path.read_text(encoding="utf-8")
-  slug = path.stem
-  title = slug_to_title(slug)
-  image_url = unsplash_url_from_slug(slug)
-  updated = original
+  title = slug_to_title(path)
 
-  if path.suffix.lower() in {".md", ".markdown", ".txt"}:
-    fm, body, has_fm = split_front_matter(updated)
+  updated = re.sub(r"crypto-tax-blog", title, original, flags=re.IGNORECASE)
+  front_matter, body, has_front_matter = split_front_matter(updated)
+  body = ensure_h1_near_top(body, title)
+  body = rewrite_html_img_tags(body)
+  body = rewrite_markdown_images(body)
 
-    if has_fm:
-      fm = ensure_front_matter_title(fm, title)
-    else:
-      fm = f"---\ntitle: \"{title}\"\nslug: \"{slug}\"\n---\n"
-      body = updated
-
-    body = ensure_h1(body, title)
-    body = replace_example_images(body, image_url)
-    updated = fm + "\n" + body.lstrip()
-  else:
-    updated = replace_example_images(updated, image_url)
-
-    if not re.search(r"<h1\b[^>]*>.*?</h1>", updated, re.IGNORECASE | re.DOTALL):
-      if re.search(r"<body[^>]*>", updated, re.IGNORECASE):
-        updated = re.sub(
-          r"(<body[^>]*>)",
-          rf"\1\n<h1>{title}</h1>\n",
-          updated,
-          count=1,
-          flags=re.IGNORECASE,
-        )
-      else:
-        updated = f"<h1>{title}</h1>\n" + updated
+  updated = f"{front_matter}\n{body}" if has_front_matter else body
 
   if updated != original:
     path.write_text(updated, encoding="utf-8")
@@ -136,25 +124,33 @@ def fix_file(path: Path) -> bool:
   return False
 
 
-def main():
-  if not BLOG_DIR.exists():
-    raise SystemExit(f"Blog folder not found: {BLOG_DIR}")
+def iter_article_files(root: str) -> list[Path]:
+  files: list[Path] = []
+  patterns = ("*.md", "*.markdown", "*.txt", "*.html", "*.htm")
 
-  changed = 0
-  scanned = 0
+  for pattern in patterns:
+    for file_path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
+      p = Path(file_path)
+      if p.is_file() and p.suffix.lower() in ALLOWED_EXTENSIONS:
+        files.append(p)
 
-  for file_path in BLOG_DIR.rglob("*"):
-    if not file_path.is_file():
-      continue
-    if file_path.suffix.lower() not in ALLOWED_EXTENSIONS:
-      continue
+  return files
 
-    scanned += 1
-    if fix_file(file_path):
-      changed += 1
-      print(f"Updated: {file_path}")
 
-  print(f"Scanned: {scanned} file(s), changed: {changed} file(s).")
+def main() -> None:
+  if not os.path.isdir(MAP_PAD):
+    raise SystemExit(f"Map not found: {MAP_PAD}")
+
+  files = iter_article_files(MAP_PAD)
+  changed_files: list[str] = []
+
+  for article in files:
+    if repair_file(article):
+      changed_files.append(str(article))
+
+  for changed in changed_files:
+    print(f"Updated: {changed}")
+  print(f"Scanned: {len(files)}, Updated: {len(changed_files)}")
 
 
 if __name__ == "__main__":

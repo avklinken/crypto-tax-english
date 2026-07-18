@@ -7,8 +7,7 @@ topic: "The best crypto tax software programs for international investors"
 published_at: "2026-07-17T15:07:19.625244+00:00"
 ---
 
-
-# The Best Crypto Tax Software Programs For International Investors
+<h1>The Best Crypto Tax Software Programs For International Investors</h1>
 
 ## Introduction
 

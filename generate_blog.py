@@ -20,6 +20,16 @@ AFFILIATES_FILE = ROOT / "affiliates.json"
 INDEX_FILE = CONTENT_DIR / "index.json"
 SITEMAP_FILE = ROOT / "sitemap.xml"
 ROBOTS_FILE = ROOT / "robots.txt"
+BLOG_NAME = "CryptoBelastingGids"
+CATEGORY_NAME = "Crypto Belasting"
+FALLBACK_IMAGE_POOL = (
+  "https://picsum.photos/id/180/1200/675",
+  "https://picsum.photos/id/0/1200/675",
+  "https://picsum.photos/id/48/1200/675",
+  "https://picsum.photos/id/96/1200/675",
+  "https://picsum.photos/id/104/1200/675",
+)
+BROKEN_IMAGE_PATTERN = re.compile(r"(example\.com|source\.unsplash\.com|://unsplash\.com|pixabay\.com/?$)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -44,6 +54,49 @@ def trim_to_limit(value: str, limit: int) -> str:
 
 def quote_yaml_value(value: str) -> str:
   return json.dumps(value, ensure_ascii=False)
+
+
+def slug_to_title(value: str) -> str:
+  cleaned = re.sub(r"[-_]+", " ", (value or "")).strip()
+  cleaned = re.sub(r"\s+", " ", cleaned)
+  if not cleaned:
+    return "Crypto Tax Guide"
+  return cleaned[:1].upper() + cleaned[1:]
+
+
+def is_placeholder_title(value: str) -> bool:
+  normalized = re.sub(r"\s+", "-", (value or "").strip().lower())
+  return normalized in {"", "crypto-tax-blog", "blog", "post"}
+
+
+def deterministic_fallback_image(seed: str) -> str:
+  if not seed:
+    return FALLBACK_IMAGE_POOL[0]
+  score = sum(ord(ch) for ch in seed)
+  return FALLBACK_IMAGE_POOL[score % len(FALLBACK_IMAGE_POOL)]
+
+
+def normalize_image_url(candidate: str, seed: str) -> str:
+  url = (candidate or "").strip()
+  if not url or BROKEN_IMAGE_PATTERN.search(url):
+    return deterministic_fallback_image(seed)
+  return url
+
+
+def normalize_generated_title(payload: dict[str, object], fallback_slug_or_topic: str) -> str:
+  for key in ("title", "h1", "post_title", "name"):
+    value = str(payload.get(key, "")).strip()
+    if value and not is_placeholder_title(value):
+      return value
+  return slug_to_title(fallback_slug_or_topic)
+
+
+def inject_leading_h1_and_image(content: str, title: str, image_url: str) -> str:
+  body = (content or "").strip()
+  body = re.sub(r"^\s*# .+\n+", "", body, count=1, flags=re.MULTILINE)
+  body = re.sub(r"^\s*<h1\b[^>]*>.*?</h1>\s*", "", body, count=1, flags=re.IGNORECASE | re.DOTALL)
+  image_tag = f"<img src=\"{image_url}\" alt=\"{title}\" loading=\"lazy\" decoding=\"async\" />"
+  return f"<h1>{title}</h1>\n\n{image_tag}\n\n{body}\n"
 
 
 def read_top_topics(path: Path, amount: int = ARTICLES_PER_RUN) -> tuple[list[str], list[str]]:
@@ -178,18 +231,23 @@ def generate_article(client: OpenAI, topic: str, affiliate_keywords: list[str]) 
 Write a high-quality English SEO article about: "{topic}".
 
 Return only valid JSON with these keys:
-- title: the article headline in English
-- meta_title: a click-worthy meta title (max 60 characters)
-- meta_description: a compelling meta description (max 155 characters)
-- content: the full article in Markdown
+- title: the real article headline
+- h1: exactly the same value as title
+- post_title: exactly the same value as title
+- name: exactly the same value as title
+- blog_name: exactly "{BLOG_NAME}"
+- category: exactly "{CATEGORY_NAME}"
+- content: the full article body in HTML (without wrapping html/head/body tags)
 
 Rules:
 - Write approximately 1200 words.
 - Write in professional, clear English.
-- Use only an intro and sections with H2/H3; do not add an H1 in the body.
-- Use proper Markdown formatting for headings, lists, bold text, and links.
+- Use only an intro and sections with H2/H3; do not add an H1 in content.
+- Use valid HTML markup for headings, lists, strong text, and links.
 - Use descriptive alt text for images and avoid raw HTML img tags.
 - Make the content SEO-friendly while still naturally readable.
+- NEVER use placeholder titles such as "crypto-tax-blog" in any field.
+- title, h1, post_title, and name must be identical.
 {affiliate_requirement_line}
 - No code fences, no extra explanations, JSON only.
 """.strip()
@@ -204,7 +262,10 @@ Rules:
         "content": (
           "You are an expert English SEO blog writer. "
           "Return one valid JSON object only with keys: "
-          "title, meta_title, meta_description, content. "
+          "title, h1, post_title, name, blog_name, category, content. "
+          "Set title/h1/post_title/name to exactly the same real human-readable article title. "
+          "Never return placeholder values like crypto-tax-blog. "
+          f"Set blog_name to {BLOG_NAME} and category to {CATEGORY_NAME}. "
           f"{affiliate_requirement}"
         ),
       },
@@ -221,20 +282,29 @@ Rules:
   except json.JSONDecodeError as exc:
     raise RuntimeError(f"Model returned invalid JSON for topic: {topic}") from exc
 
-  title = str(payload.get("title", "")).strip() or topic
-  meta_title = trim_to_limit(str(payload.get("meta_title", "")).strip() or title, 60)
-  content_markdown = str(payload.get("content", "") or payload.get("content_markdown", "")).strip()
-
-  if not content_markdown:
+  title = normalize_generated_title(payload, topic)
+  content_html = str(payload.get("content", "") or payload.get("content_markdown", "")).strip()
+  if not content_html:
     raise RuntimeError(f"Missing content for topic: {topic}")
 
-  plain_body = re.sub(r"<[^>]+>", "", content_markdown)
+  seed = f"{topic}|{title}"
+  image_url = normalize_image_url(str(payload.get("image_url", "")).strip(), seed)
+  content_markdown = inject_leading_h1_and_image(content_html, title, image_url)
+
+  plain_body = re.sub(r"<[^>]+>", "", content_html)
   plain_body = re.sub(r"[#>*_`]", "", plain_body)
   fallback_description = trim_to_limit(re.sub(r"\s+", " ", plain_body).strip()[:155], 155)
   meta_description = trim_to_limit(str(payload.get("meta_description", "")).strip() or fallback_description or title, 155)
+  meta_title = trim_to_limit(str(payload.get("meta_title", "")).strip() or title, 60)
 
   return {
     "title": title,
+    "h1": title,
+    "post_title": title,
+    "name": title,
+    "blog_name": BLOG_NAME,
+    "category": CATEGORY_NAME,
+    "image_url": image_url,
     "meta_title": meta_title,
     "meta_description": meta_description,
     "content_markdown": content_markdown,
@@ -250,11 +320,17 @@ def save_generated_post(topic: str, article: dict[str, str]) -> Path:
     output = CONTENT_DIR / f"{base_slug}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.md"
 
   published_at = datetime.now(timezone.utc).isoformat()
-  body = strip_leading_h1(article["content_markdown"])
+  body = article["content_markdown"].strip()
   front_matter = "\n".join(
     [
       "---",
       f"title: {quote_yaml_value(article['title'])}",
+      f"h1: {quote_yaml_value(article['h1'])}",
+      f"post_title: {quote_yaml_value(article['post_title'])}",
+      f"name: {quote_yaml_value(article['name'])}",
+      f"blog_name: {quote_yaml_value(article['blog_name'])}",
+      f"category: {quote_yaml_value(article['category'])}",
+      f"image_url: {quote_yaml_value(article['image_url'])}",
       f"meta_title: {quote_yaml_value(article['meta_title'])}",
       f"meta_description: {quote_yaml_value(article['meta_description'])}",
       f"slug: {quote_yaml_value(output.stem)}",
