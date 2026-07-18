@@ -20,8 +20,8 @@ AFFILIATES_FILE = ROOT / "affiliates.json"
 INDEX_FILE = CONTENT_DIR / "index.json"
 SITEMAP_FILE = ROOT / "sitemap.xml"
 ROBOTS_FILE = ROOT / "robots.txt"
-BLOG_NAME = "CryptoBelastingGids"
-CATEGORY_NAME = "Crypto Belasting"
+BLOG_NAME = "TaxCryptoGuide"
+CATEGORY_NAME = "Crypto Taxes"
 FALLBACK_IMAGE_POOL = (
   "https://picsum.photos/id/180/1200/675",
   "https://picsum.photos/id/0/1200/675",
@@ -36,6 +36,57 @@ BROKEN_IMAGE_PATTERN = re.compile(r"(example\.com|source\.unsplash\.com|://unspl
 class AffiliateRule:
   keyword: str
   url: str
+
+
+@dataclass(frozen=True)
+class AuthorProfile:
+  name: str
+  role: str
+  bio: str
+
+
+AUTHOR_PROFILES = [
+  AuthorProfile(
+    name="Eva Sinclair",
+    role="Crypto Tax Consultant",
+    bio=(
+      "Eva helps investors structure crypto tax reporting with clear, audit-friendly records. "
+      "She focuses on practical compliance steps for active portfolios."
+    ),
+  ),
+  AuthorProfile(
+    name="Milan Reeves",
+    role="On-chain Data Analyst",
+    bio=(
+      "Milan analyzes wallet and exchange data to reconstruct taxable events with precision. "
+      "He translates technical transaction logs into filing-ready evidence."
+    ),
+  ),
+  AuthorProfile(
+    name="Sophie Hartman",
+    role="Financial Compliance Strategist",
+    bio=(
+      "Sophie advises on cross-border reporting and regulatory readiness for digital-asset holders. "
+      "Her work combines policy interpretation with practical execution."
+    ),
+  ),
+  AuthorProfile(
+    name="Noah Bennett",
+    role="Digital Asset Accountant",
+    bio=(
+      "Noah specializes in crypto bookkeeping, gain/loss reconciliation, and tax-year close preparation. "
+      "He emphasizes clean records that stand up to review."
+    ),
+  ),
+  AuthorProfile(
+    name="Lotte Warren",
+    role="DeFi Risk Advisor",
+    bio=(
+      "Lotte maps DeFi activity to real-world tax implications across staking, lending, and swaps. "
+      "She helps readers identify hidden reporting risk before it becomes costly."
+    ),
+  ),
+]
 
 
 def slugify(text: str) -> str:
@@ -130,6 +181,102 @@ def write_remaining_topics(path: Path, remaining_lines: list[str]) -> None:
     path.write_text(payload + "\n", encoding="utf-8")
   else:
     path.write_text("", encoding="utf-8")
+
+
+def select_author(topic: str) -> AuthorProfile:
+  seed_value = sum(ord(ch) for ch in topic)
+  return AUTHOR_PROFILES[seed_value % len(AUTHOR_PROFILES)]
+
+
+def tokenize_for_relevance(text: str) -> set[str]:
+  stopwords = {
+    "the", "and", "for", "with", "from", "that", "this", "your", "into", "about", "over",
+    "how", "what", "when", "where", "which", "while", "will", "have", "has", "had", "are",
+    "you", "crypto", "tax", "taxes", "guide", "blog", "article",
+  }
+  tokens = re.findall(r"[a-z0-9]{3,}", (text or "").lower())
+  return {token for token in tokens if token not in stopwords}
+
+
+def load_existing_posts(index_path: Path, content_dir: Path) -> list[dict[str, str]]:
+  posts: list[dict[str, str]] = []
+
+  if index_path.exists():
+    try:
+      payload = json.loads(index_path.read_text(encoding="utf-8"))
+      for item in payload.get("posts", []):
+        slug = str(item.get("slug", "")).strip()
+        title = str(item.get("title", "")).strip()
+        if slug and title:
+          posts.append({"slug": slug, "title": title})
+    except json.JSONDecodeError:
+      pass
+
+  known_slugs = {item["slug"] for item in posts}
+  for path in content_dir.glob("*.md"):
+    if path.stem in known_slugs:
+      continue
+    raw = path.read_text(encoding="utf-8")
+    meta, body = parse_front_matter(raw)
+    title = str(meta.get("title", "")).strip()
+    if not title:
+      heading_match = re.search(r"^\s*<h1\b[^>]*>(.*?)</h1>", body, flags=re.IGNORECASE | re.DOTALL)
+      if heading_match:
+        title = strip_html_tags(heading_match.group(1))
+      else:
+        title = slug_to_title(path.stem)
+    posts.append({"slug": path.stem, "title": title})
+    known_slugs.add(path.stem)
+
+  return posts
+
+
+def select_related_posts(topic: str, title: str, existing_posts: list[dict[str, str]], max_links: int = 2) -> list[dict[str, str]]:
+  topic_tokens = tokenize_for_relevance(f"{topic} {title}")
+  scored: list[tuple[int, dict[str, str]]] = []
+
+  for post in existing_posts:
+    post_tokens = tokenize_for_relevance(f"{post['title']} {post['slug']}")
+    overlap = len(topic_tokens.intersection(post_tokens))
+    scored.append((overlap, post))
+
+  scored.sort(key=lambda item: item[0], reverse=True)
+  best = [post for score, post in scored if score > 0][:max_links]
+  if best:
+    return best
+  return [post for _, post in scored][:max_links]
+
+
+def strip_html_tags(text: str) -> str:
+  return re.sub(r"<[^>]+>", "", text or "").strip()
+
+
+def append_related_and_signature(
+  content_html: str,
+  topic: str,
+  title: str,
+  author: AuthorProfile,
+  existing_posts: list[dict[str, str]],
+) -> str:
+  related = [post for post in select_related_posts(topic, title, existing_posts, max_links=2) if post["slug"] != slugify(topic)]
+  related = related[:2]
+  related_block = ""
+  if related:
+    links = [f"- [{post['title']}]({SITE_URL}/post.html?slug={post['slug']})" for post in related]
+    related_block = "## Related articles:\n\n" + "\n".join(links) + "\n\n"
+
+  disclaimer = (
+    "*Disclaimer: The information on this website is for informational purposes only and does not constitute financial "
+    "or tax advice. Always verify legislation with the tax authority or a certified advisor.*"
+  )
+
+  signature = (
+    "### About the author\n"
+    f"**{author.name}** — {author.role}\n\n"
+    f"{author.bio}\n"
+  )
+
+  return f"{content_html.rstrip()}\n\n{related_block}---\n\n{disclaimer}\n\n{signature}"
 
 
 def parse_front_matter(text: str) -> tuple[dict[str, str], str]:
@@ -311,7 +458,7 @@ Rules:
   }
 
 
-def save_generated_post(topic: str, article: dict[str, str]) -> Path:
+def save_generated_post(topic: str, article: dict[str, str], author: AuthorProfile, existing_posts: list[dict[str, str]]) -> Path:
   CONTENT_DIR.mkdir(parents=True, exist_ok=True)
   base_slug = slugify(topic)
   output = CONTENT_DIR / f"{base_slug}.md"
@@ -320,7 +467,13 @@ def save_generated_post(topic: str, article: dict[str, str]) -> Path:
     output = CONTENT_DIR / f"{base_slug}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.md"
 
   published_at = datetime.now(timezone.utc).isoformat()
-  body = article["content_markdown"].strip()
+  body = append_related_and_signature(
+    content_html=article["content_markdown"].strip(),
+    topic=topic,
+    title=article["title"],
+    author=author,
+    existing_posts=existing_posts,
+  )
   front_matter = "\n".join(
     [
       "---",
@@ -330,6 +483,9 @@ def save_generated_post(topic: str, article: dict[str, str]) -> Path:
       f"name: {quote_yaml_value(article['name'])}",
       f"blog_name: {quote_yaml_value(article['blog_name'])}",
       f"category: {quote_yaml_value(article['category'])}",
+      f"author_name: {quote_yaml_value(author.name)}",
+      f"author_role: {quote_yaml_value(author.role)}",
+      f"author_bio: {quote_yaml_value(author.bio)}",
       f"image_url: {quote_yaml_value(article['image_url'])}",
       f"meta_title: {quote_yaml_value(article['meta_title'])}",
       f"meta_description: {quote_yaml_value(article['meta_description'])}",
@@ -602,6 +758,7 @@ def main() -> None:
   CONTENT_DIR.mkdir(parents=True, exist_ok=True)
   rules = load_affiliate_rules(AFFILIATES_FILE)
   affiliate_keywords = [rule.keyword for rule in rules]
+  existing_posts = load_existing_posts(INDEX_FILE, CONTENT_DIR)
   topics, remaining = read_top_topics(TOPICS_FILE, amount=ARTICLES_PER_RUN)
 
   if topics:
@@ -613,8 +770,10 @@ def main() -> None:
     failed_topics: list[str] = []
     for topic in topics:
       try:
+        author = select_author(topic)
         article = generate_article(client, topic, affiliate_keywords)
-        save_generated_post(topic, article)
+        saved_path = save_generated_post(topic, article, author, existing_posts)
+        existing_posts.append({"slug": saved_path.stem, "title": article["title"]})
       except Exception as exc:
         print(f"Warning: skipped topic '{topic}' due to error: {exc}")
         failed_topics.append(topic)
