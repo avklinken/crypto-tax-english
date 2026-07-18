@@ -43,7 +43,11 @@ function inlineImageFallback(title) {
 
 function normalizeTitle(meta, fallbackSlug) {
   const candidates = [meta?.title, meta?.h1, meta?.post_title, meta?.name, meta?.meta_title].map((v) => stripHtmlTags(v || ""));
-  const valid = candidates.find((v) => v && v.toLowerCase() !== "crypto-tax-blog");
+  const invalidTitles = new Set(["crypto-tax-blog", "crypto-tax-english", "taxcryptoguide", "article"]);
+  const valid = candidates.find((v) => {
+    const normalized = v.toLowerCase().trim();
+    return v && !invalidTitles.has(normalized);
+  });
   return valid || slugToTitle(fallbackSlug);
 }
 
@@ -221,6 +225,18 @@ function extractFirstImageFromHtml(htmlText) {
   return doc.querySelector("img")?.getAttribute("src") || "";
 }
 
+async function fetchPostMetaFromIndex(slug) {
+  try {
+    const response = await fetch("./content/index.json", { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const posts = Array.isArray(data?.posts) ? data.posts : [];
+    return posts.find((post) => String(post?.slug || "").trim() === slug) || null;
+  } catch {
+    return null;
+  }
+}
+
 function setPostImage(imageEl, imageUrl, title) {
   if (!imageEl) return;
   const src = String(imageUrl || "").trim();
@@ -293,19 +309,19 @@ function extractRenderedHtmlDocument(htmlText, fallbackSlug) {
 
   const container = contentNode.cloneNode(true);
   container.querySelectorAll("script, style, noscript, iframe").forEach((el) => el.remove());
-  const firstH1 = container.querySelector("h1");
-  if (firstH1) {
-    firstH1.remove();
-  }
+
+  const headingCandidates = Array.from(container.querySelectorAll("h1, h2, h3"))
+    .map((node) => stripHtmlTags(node.textContent || ""))
+    .filter(Boolean);
+  const badHeadings = new Set(["crypto-tax-english", "taxcryptoguide", "article"]);
+  const titleFromBodyHeading = headingCandidates.find((text) => !badHeadings.has(text.toLowerCase()));
+
   const firstImage = container.querySelector("img");
   if (firstImage) {
     firstImage.remove();
   }
 
-  const titleFromContent = stripHtmlTags(
-    doc.querySelector("main article h1")?.textContent || doc.querySelector("article h1")?.textContent || doc.querySelector("h1")?.textContent || ""
-  );
-  const title = normalizeTitle({ title: titleFromContent || titleFromHead }, fallbackSlug);
+  const title = normalizeTitle({ title: titleFromBodyHeading || titleFromHead }, fallbackSlug);
 
   return {
     meta: {
@@ -354,7 +370,24 @@ async function fetchPost(slug) {
 
     const rawText = await response.text();
     if (path.endsWith(".html")) {
-      return extractRenderedHtmlDocument(rawText, slug);
+      const htmlDoc = extractRenderedHtmlDocument(rawText, slug);
+      const indexMeta = await fetchPostMetaFromIndex(slug);
+      if (indexMeta) {
+        htmlDoc.meta.title = normalizeTitle(
+          {
+            title: htmlDoc.meta.title,
+            meta_title: indexMeta.title || htmlDoc.meta.meta_title,
+            h1: indexMeta.title || "",
+            post_title: indexMeta.title || "",
+            name: indexMeta.title || "",
+          },
+          slug
+        );
+        htmlDoc.meta.meta_title = stripHtmlTags(indexMeta.meta_title || indexMeta.title || htmlDoc.meta.meta_title || htmlDoc.meta.title);
+        htmlDoc.meta.meta_description = stripHtmlTags(indexMeta.meta_description || htmlDoc.meta.meta_description || "");
+        htmlDoc.meta.published_at = stripHtmlTags(indexMeta.published_at || htmlDoc.meta.published_at || "");
+      }
+      return htmlDoc;
     }
     return extractMarkdownDocument(rawText, slug);
   }
@@ -394,7 +427,7 @@ async function loadPost() {
     contentEl.innerHTML = renderedHtml;
     removeDuplicateLeadTitle(contentEl, post.meta.title);
     styleRenderedContent(contentEl, post.meta.title);
-    metaEl.textContent = post.meta.published_at ? `Published: ${new Date(post.meta.published_at).toLocaleDateString("en-US")}` : `Article: ${slug}`;
+    metaEl.textContent = post.meta.published_at ? `Published: ${new Date(post.meta.published_at).toLocaleDateString("en-US")}` : "";
     if (readingTimeEl) {
       readingTimeEl.textContent = estimateReadingTime(post.body);
     }
