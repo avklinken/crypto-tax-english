@@ -18,12 +18,15 @@
 }
 
 .brand-logo {
-  width: auto;
-  max-height: 40px;
+  display: block;
+  height: 40px;
+  width: 44px;
+  min-width: 44px;
+  flex-shrink: 0;
 }
 
 .brand-name {
-  font-size: 1.05rem;
+  font-size: 1.12rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #111827;
@@ -35,6 +38,8 @@
 
 @media (min-width: 768px) {
   .brand-logo {
-    max-height: 50px;
+    height: 50px;
+    width: 56px;
+    min-width: 56px;
   }
 }
