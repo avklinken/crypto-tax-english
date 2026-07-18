@@ -66,4 +66,16 @@
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
+  <url>
+    <loc>https://www.taxcryptoguide.com/post.html?slug=how-does-the-irs-view-crypto-to-crypto-trades</loc>
+    <lastmod>2026-07-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.taxcryptoguide.com/post.html?slug=are-stablecoins-like-usdt-and-usdc-subject-to-capital-gains-tax</loc>
+    <lastmod>2026-07-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
