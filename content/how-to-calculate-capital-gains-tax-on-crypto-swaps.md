@@ -58,3 +58,16 @@ While calculating taxes is crucial, securing your crypto assets is equally impor
 Calculating capital gains tax on crypto swaps doesn't have to be daunting. By understanding the steps involved and leveraging tools like <a href='https://koinly.io/?via=ED1CED45&utm_source=affiliate' target='_blank' rel='noopener nofollow sponsored'>Koinly</a>, you can ensure accurate and efficient tax reporting. Moreover, securing your assets with a reliable hardware wallet like the <a href='https://shop.ledger.com/?r=328e3afd260c' target='_blank' rel='noopener nofollow sponsored'>Ledger Nano</a> can protect your investments from potential threats.
 
 By staying informed and utilizing the right resources, you can navigate the complexities of crypto taxation with confidence and ease.
+
+## Related articles
+
+- [Are Stablecoins Like USDT and USDC Subject to Capital Gains Tax?](https://www.taxcryptoguide.com/post.html?slug=are-stablecoins-like-usdt-and-usdc-subject-to-capital-gains-tax)
+- [Understanding Short Term vs Long Term Crypto Capital Gains](https://www.taxcryptoguide.com/post.html?slug=the-differences-between-short-term-and-long-term-crypto-capital-gains)
+
+*Disclaimer: The information on this website is for informational purposes only and does not constitute financial or tax advice. Always verify legislation with the tax authority or a certified advisor.*
+
+### About the author
+
+**Sophie Hartman** — Financial Compliance Strategist
+
+Sophie advises on cross-border reporting and regulatory readiness for digital-asset holders. Her work combines policy interpretation with practical execution.
